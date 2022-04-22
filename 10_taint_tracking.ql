@@ -5,17 +5,18 @@
 
 import cpp
 import semmle.code.cpp.dataflow.TaintTracking
+import semmle.code.cpp.security.Security
 import DataFlow::PathGraph
 
 class NetworkByteSwap extends Expr {
     NetworkByteSwap () {
       
       exists(MacroInvocation mi |
-        mi.getMacroName().regexpMatch("ntoh.*") and this = mi.getExpr()
+        mi.getMacroName().regexpMatch("ntoh(s|l|ll)") and this = mi.getExpr()
       )
       
     }
-  }
+}
 
 class Config extends TaintTracking::Configuration {
   Config() { this = "NetworkToMemFuncLength" }
@@ -24,10 +25,13 @@ class Config extends TaintTracking::Configuration {
     source.asExpr() instanceof NetworkByteSwap
   }
   override predicate isSink(DataFlow::Node sink) {
-    sink.asParameter().getFunction().getName() = "memcpy" and sink.asParameter().getIndex() = 2
+    exists (FunctionCall fc |
+      fc.getTarget().getName() = "memcpy" and
+      fc.getArgument(2) = sink.asExpr()
+    )
   }
 }
 
 from Config cfg, DataFlow::PathNode source, DataFlow::PathNode sink
 where cfg.hasFlowPath(source, sink)
-select sink, source, sink, "Network byte swap flows to memcpy"
+select sink as s1, source as s2, sink as s3, "Network byte swap flows to memcpy"
